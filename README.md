@@ -16,7 +16,7 @@ ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=pord,Pro
 ```
 
 Further you can automatically inject this annotation into any `persistentVolumeClaim` or `volumeClaimTemplate`
-by adding the annotation in any namespace config of `persistentVolumeClaim` as shown in `deployment/cm.yaml`
+by adding the annotation in `persistentVolumeClaim` of any namespace config for `k8s-metadata-injector` as shown in `deployment/cm.yaml`
 
 The reason to supports these kind of resources is their importance to cost and usage estimations such that:
 * pod will correspond to cpu/mem usages on AWS EC2s
