@@ -39,7 +39,9 @@ To install `k8s-metadata-injector`:
 * Ensure that MutatingAdmissionWebhook admission controllers are enabled.
 * Ensure that the admissionregistration.k8s.io/v1beta1 API is enabled.
 
-First generate `k8s-metadata-injector` required certificate as follow:
+**Warning:** The `webhook-create-signed-cert.sh` and `webhook-patch-ca-bundle.sh` scripts will use `kubectl` default context. So if there are multiple clusters configured in kubeconfig, then you have to change the default context to the cluster where `k8s-metadata-injector` will be deployed.
+
+First generate and deploy the required certificate for `k8s-metadata-injector` as follow:
 
 ```bash
 ./deployment/webhook-create-signed-cert.sh \
@@ -48,13 +50,13 @@ First generate `k8s-metadata-injector` required certificate as follow:
             --secret k8s-metadata-injector
 ```
 
-Then modify the config in `cm.yaml` to inject the annotations and labels to all defined namespace, and deploy:
+Then modify the config in `cm.yaml` as desired to inject the annotations and labels to all defined namespaces, and deploy:
 
 ```bash
 kubectl apply -f deployment/cm.yaml
 ```
 
-Finally install `k8s-metadata-injector`
+Finally replacing `${CA_BUNDLE}` with cluster CA certificate and install `k8s-metadata-injector` as follows:
 
 ```bash
 cat deployment/install.yaml | \
