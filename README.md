@@ -34,7 +34,7 @@ To install `k8s-metadata-injector`:
 First generate `k8s-metadata-injector` required certificate as follow:
 
 ```bash
-./deployment/webhook-create-signed-cert.sh
+./deployment/webhook-create-signed-cert.sh \
             --service k8s-metadata-injector \
             --namespace kube-system \
             --secret k8s-metadata-injector
