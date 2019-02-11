@@ -31,6 +31,8 @@ To exclude resources from metadata injection you can use the following annotatio
 k8s-metadata-injector.kubernetes.io/skip": "true"
 ```
 
+**Note:** the `kube-system` and `kube-public` namespaces are excluded from injection.
+
 ## Installation
 
 To install `k8s-metadata-injector`:
