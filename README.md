@@ -25,6 +25,12 @@ The reason to supports these kind of resources is their importance to cost and u
 
 The ability to automatically inject labels and annotations to the previous resources based on namespaces will simplify the classification and grouping of cluster resources that corresponds to AWS resources. It could be used with other tools for cost estimations like Cloudhealth.
 
+To exclude resources from metadata injection you can use the following annotation:
+
+```yaml
+k8s-metadata-injector.kubernetes.io/skip": "true"
+```
+
 ## Installation
 
 To install `k8s-metadata-injector`:
