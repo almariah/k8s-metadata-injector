@@ -1,0 +1,135 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    k8s-app: k8s-metadata-injector
+  name: k8s-metadata-injector
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+rules:
+- apiGroups: [""]
+  resources: ["persistentvolumes", "persistentvolumeclaims"]
+  verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-metadata-injector
+subjects:
+- kind: ServiceAccount
+  name: k8s-metadata-injector
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+data:
+  metadataconfig.yaml: |
+    pod:
+      default:
+        labels:
+          Team: devops
+          Env: pord
+          Project: k8s
+    service:
+      default:
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "Team=devops,Env=pord,Project=k8s"
+    persistentVolumeClaim:
+      default:
+        annotations:
+          ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=pord,Project=k8s"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+  labels:
+    app: k8s-metadata-injector
+spec:
+  ports:
+  - port: 443
+    targetPort: 443
+  selector:
+    app: k8s-metadata-injector
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+  labels:
+    app: k8s-metadata-injector
+webhooks:
+  - name: serve.k8s-metadata-injector.io
+    clientConfig:
+      service:
+        name: k8s-metadata-injector
+        namespace: kube-system
+        path: "/serve"
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURKekNDQWcrZ0F3SUJBZ0lVZjZHeVZ1aGdkVFJid1QzZWpYVTM0NHl5T080d0RRWUpLb1pJaHZjTkFRRUwKQlFBd0ZURVRNQkVHQTFVRUF4TUthM1ZpWlhKdVpYUmxjekFlRncweE9UQXlNVEF3TXpFMk1EQmFGdzB5TURBeQpNVEF3TXpFMk1EQmFNREF4TGpBc0JnTlZCQU1USldzNGN5MXRaWFJoWkdGMFlTMXBibXBsWTNSdmNpNXJkV0psCkxYTjVjM1JsYlM1emRtTXdnZ0VpTUEwR0NTcUdTSWIzRFFFQkFRVUFBNElCRHdBd2dnRUtBb0lCQVFDcWtMVmoKcUkyQWp6SVRVVXlEbjZIVmRPSm1iRHd4MFczQW12M01zNFgwdUJ2NlpzNmxNbHlxRXhZdCtta09HdC9ETTFORQo5TEc0T1RhZ1NTeVhEN0UwUXFkWUNHQnBxMVpyM3NLZk5GakFXa3BqNkhvOUxGeVBhci8vUkpuVVFHcEpYNlNGCnhZWWRlRVh0cXZWcENUOWxtQWpGTENSRzNIUU9Zck13bjlmcC9ZZWllemtZYWJLVC83cUdibmYyaXZ2cHNxb3EKY2NvZGphQUZHU1phSWF6NkNjWkYwN2dmV1lRYUNWSndycnMvNGNpS0xYK296SlRuYWw5aSthNWdmaWZZakJxQQpEaW5vbmxIcUt4RXBibEtyN0VBZWlXMHJKUnlQa1Y0OHlVQm1ON0xKVFQ4NnVGbWZnK3FGcWtlM1luVFhsWHQxClBzdG1oQTFnWXZVUXlOSWxBZ01CQUFHalZEQlNNQTRHQTFVZER3RUIvd1FFQXdJRm9EQVRCZ05WSFNVRUREQUsKQmdnckJnRUZCUWNEQVRBTUJnTlZIUk1CQWY4RUFqQUFNQjBHQTFVZERnUVdCQlNwZ1B1S2w1MS91dWhMVityRApnU1RJbEJhTHZEQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFhMDk5VXV2eGNXWlF4WnlPM3J6Zld6eWIvYzZuCkNkcUxsMloxQ1dLUXJveUVoK25GelVkRk1FN2dMdmNPOS9WWFlBK1JxbmhDczE2Sk1aT3I2cFNzbkI0MnJQZS8KOU9lY0lWNFRoM2JDYlFwaG1SSU1RT3lJNW5xVTFYaEpTTzZ1cm9EY01FU1NsRjBXNXFhd1BEMTN3YVAxY1A1aApCNmUyS3drdjl6bURJMGtWYkhxVW9kT1J0NGdyRW1kSjBWb2cxV3lzNVJldm82eE1XMklTd202OHlmZEN5MFZICnByaWwzTXhBcDlMNGd1b1RLa2I5cmhDeXI5VFA0RkJiVExTNmdKODMvYWU1RTlMSEZ6MFhmS2ttZzlGWWFWQ3YKdFVVbndWTXUxTXVlRDRTcjQ4NExxcGtXUEJnMC82Z1NkN0RiN3BWcVNDTjN1SDV3QUdGU09QOVF6Zz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+    rules:
+      - operations: [ "CREATE" ]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods", "services", "persistentvolumeclaims"]
+      - operations: [ "UPDATE" ]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["services", "persistentvolumeclaims"]
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+  labels:
+    app: k8s-metadata-injector
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: k8s-metadata-injector
+      annotations:
+        iam.amazonaws.com/role: KubernetesEBSCreateTagsAccess
+    spec:
+      serviceAccountName: k8s-metadata-injector
+      containers:
+        - name: k8s-metadata-injector
+          image: abdullahalmariah/k8s-metadata-injector:latest
+          imagePullPolicy: Always
+          args:
+            - -metadataCfgFile=/etc/webhook/config/metadataconfig.yaml
+            - -tlsCertFile=/etc/webhook/certs/cert.pem
+            - -tlsKeyFile=/etc/webhook/certs/key.pem
+            - -logtostderr=true
+            - -v=2
+          ports:
+          - containerPort: 443
+          volumeMounts:
+            - name: certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+            - name: config
+              mountPath: /etc/webhook/config
+      volumes:
+        - name: certs
+          secret:
+            secretName: k8s-metadata-injector
+        - name: config
+          configMap:
+            name: k8s-metadata-injector

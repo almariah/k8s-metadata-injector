@@ -1,0 +1,67 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: busybox
+  labels:
+    app: busybox
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: busybox
+    spec:
+      containers:
+      - image: busybox
+        command:
+          - sleep
+          - "3600"
+        imagePullPolicy: IfNotPresent
+        name: busybox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: busybox
+  labels:
+    app: busybox
+spec:
+  ports:
+  - port: 443
+    targetPort: 443
+  selector:
+    app: busybox
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  serviceName: "nginx"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: k8s.gcr.io/nginx-slim:0.8
+        ports:
+        - containerPort: 80
+          name: web
+        volumeMounts:
+        - name: www
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: gp2-stateful
+      resources:
+        requests:
+          storage: 10Gi
