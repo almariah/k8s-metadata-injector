@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Labels and annotations is important to classify Kubernetes resources. Further, there are some annotations that will tag the corresponding AWS resources that will be created by the Kubernetes itself.
+Labels and annotations are important to classify Kubernetes resources. Further, there are some annotations that will tag the corresponding AWS resources that will be created by the Kubernetes itself.
 
 The `k8s-metadata-injector` has two goals:
 
