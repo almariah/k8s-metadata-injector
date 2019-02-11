@@ -12,7 +12,7 @@ The `k8s-metadata-injector` has two goals:
 You can add tags to EBS volumes by setting the following annotations in `persistentVolumeClaim` or `volumeClaimTemplate` as follow (example):
 
 ```yaml
-ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=pord,Project=k8s"
+ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=prod,Project=k8s"
 ```
 
 Further you can automatically inject this annotation into any `persistentVolumeClaim` or `volumeClaimTemplate`
