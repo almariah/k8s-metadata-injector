@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+data:
+  metadataconfig.yaml: |
+    pod:
+      default:
+        labels:
+          Team: devops
+          Env: pord
+          Project: k8s
+    service:
+      default:
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "Team=devops,Env=pord,Project=k8s"
+    persistentVolumeClaim:
+      default:
+        annotations:
+          ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=pord,Project=k8s"

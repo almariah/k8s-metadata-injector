@@ -1,16 +1,61 @@
 # k8s-metadata-injector
 
-CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo .
-docker build . -t abdullahalmariah/k8s-metadata-injector:latest
-docker push abdullahalmariah/k8s-metadata-injector:latest
+## Introduction
 
-./webhook-create-signed-cert.sh --service k8s-metadata-injector --namespace kube-system --secret k8s-metadata-injector
+Labels and annotations is important to classify Kubernetes resources. Further, there are some annotations that will tag the corresponding AWS resources that will be created by the Kubernetes itself.
 
-get cert.pem using and substitute caBundle
+The `k8s-metadata-injector` has two goals:
 
-kubectl get secret k8s-metadata-injector -n kube-system -o yam
+* Inject additional labels and annotations to `pods`, `services` and `persistentvolumeclaims`.
+* Add tags to created AWS EBS volumes created by `persistentvolumeclaims`
 
-kubectl apply -f install.yaml
+You can add tags to EBS volumes by setting the following annotations in `persistentVolumeClaim` or `volumeClaimTemplate` as follow (example):
+
+```yaml
+ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=pord,Project=k8s"
+```
+
+Further you can automatically inject this annotation into any `persistentVolumeClaim` or `volumeClaimTemplate`
+by adding the annotation in any namespace config of `persistentVolumeClaim` as shown in `deployment/cm.yaml`
+
+The reason to supports these kind of resources is their importance to cost and usage estimations such that:
+* pod will correspond to cpu/mem usages on AWS EC2s
+* services will be correspond to AWS Load balancers
+* persistentvolumeclaims will correspond to EBS volumes
+
+The ability to automatically inject labels and annotations to the previous resources based on namespaces will simplify the classification and grouping of cluster resources that corresponds to AWS resources. It could be used with other tools for cost estimations like Cloudhealth.
+
+## Installation
+
+To install `k8s-metadata-injector`:
+* Ensure that MutatingAdmissionWebhook admission controllers are enabled.
+* Ensure that the admissionregistration.k8s.io/v1beta1 API is enabled.
+
+First generate `k8s-metadata-injector` required certificate as follow:
+
+```bash
+./deployment/webhook-create-signed-cert.sh
+            --service k8s-metadata-injector \
+            --namespace kube-system \
+            --secret k8s-metadata-injector
+```
+
+Then modify the config in `cm.yaml` to inject the annotations and labels to all defined namespace, and deploy:
+
+```bash
+kubectl apply -f deployment/cm.yaml
+```
+
+Finally install `k8s-metadata-injector`
+
+```bash
+cat deployment/install.yaml | \
+    ./deployment/webhook-patch-ca-bundle.sh | \
+    kubectl apply -f -
+```
+
+### Required IAM policy:
+To tag EBS volumes based on `ebs-tagger.kubernetes.io/ebs-additional-resource-tags` annotation, the following policy is needed:
 
 ```json
 {
@@ -25,4 +70,16 @@ kubectl apply -f install.yaml
         }
     ]
 }
+```
+
+In `deployment/install.yaml` kube2iam annotation `iam.amazonaws.com/role: KubernetesEBSCreateTagsAccess` is used as an example to allow `ebs-tagger` (small controller in k8s-metadata-injector) to tag EBS volumes.
+
+## Build
+
+To build `k8s-metadata-injector` as a docker container:
+
+```bash
+CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o build/k8s-metadata-injector .
+docker build -t abdullahalmariah/k8s-metadata-injector:latest build/
+docker push abdullahalmariah/k8s-metadata-injector:latest
 ```
