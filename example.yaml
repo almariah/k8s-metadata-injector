@@ -1,64 +1,44 @@
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: busybox
-  labels:
-    app: busybox
-spec:
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: busybox
-    spec:
-      containers:
-      - image: busybox
-        command:
-          - sleep
-          - "3600"
-        imagePullPolicy: IfNotPresent
-        name: busybox
----
 apiVersion: v1
 kind: Service
 metadata:
-  name: busybox
+  name: kuard
   labels:
-    app: busybox
+    app: kuard
 spec:
   ports:
-  - port: 443
-    targetPort: 443
+  - port: 80
+    targetPort: 8080
   selector:
-    app: busybox
+    app: kuard
+  type: LoadBalancer
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: web
+  name: kuard
 spec:
-  serviceName: "nginx"
-  replicas: 2
+  serviceName: "kuard"
+  replicas: 3
   selector:
     matchLabels:
-      app: nginx
+      app: kuard
   template:
     metadata:
       labels:
-        app: nginx
+        app: kuard
     spec:
       containers:
-      - name: nginx
-        image: k8s.gcr.io/nginx-slim:0.8
+      - name: kuard
+        image: gcr.io/kuar-demo/kuard-amd64:1
         ports:
-        - containerPort: 80
+        - containerPort: 8080
           name: web
         volumeMounts:
-        - name: www
-          mountPath: /usr/share/nginx/html
+        - name: tmp
+          mountPath: /tmp
   volumeClaimTemplates:
   - metadata:
-      name: www
+      name: tmp
     spec:
       accessModes: [ "ReadWriteOnce" ]
       storageClassName: gp2-stateful
