@@ -6,7 +6,7 @@ Labels and annotations are important to classify Kubernetes resources. Further, 
 
 The `k8s-metadata-injector` has two goals:
 
-* Inject additional labels and annotations to `pods`, `services` and `persistentvolumeclaims`.
+* Inject additional labels and annotations to `pods`, `services` and `persistentvolumeclaims` based on predefined config per namespace.
 * Add tags to created AWS EBS volumes created by `persistentvolumeclaims`
 
 You can add tags to EBS volumes by setting the following annotations in `persistentVolumeClaim` or `volumeClaimTemplate` as follow (example):
