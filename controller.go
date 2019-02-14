@@ -67,10 +67,13 @@ func NewController(kubeclientset kubernetes.Interface) *Controller {
       AddFunc: func(obj interface{}) {
         key, err := cache.MetaNamespaceKeyFunc(obj)
 			  if err == nil {
-          queue.AddRateLimited(Task{
-            Key: key,
-            Action: "CREATE",
-          })
+          pv := obj.(*corev1.PersistentVolume)
+          if pv.Spec.PersistentVolumeSource.AWSElasticBlockStore != nil {
+            queue.AddRateLimited(Task{
+              Key: key,
+              Action: "CREATE",
+            })
+          }
 			  } else {
           runtime.HandleError(err)
 				  return
