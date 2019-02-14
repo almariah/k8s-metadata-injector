@@ -88,7 +88,7 @@ spec:
       serviceAccountName: k8s-metadata-injector
       containers:
         - name: k8s-metadata-injector
-          image: abdullahalmariah/k8s-metadata-injector:latest
+          image: abdullahalmariah/k8s-metadata-injector:v1.0.0
           imagePullPolicy: Always
           args:
             - -metadataCfgFile=/etc/webhook/config/metadataconfig.yaml
