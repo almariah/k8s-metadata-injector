@@ -1,44 +1,43 @@
 package main
 
 import (
-	"strings"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 )
 
 func getEBSTags(annotation string) ([]*ec2.Tag, error) {
 
-  var tags []*ec2.Tag
+	var tags []*ec2.Tag
 
-  tagsKeyVal := strings.Split(annotation, ",")
+	tagsKeyVal := strings.Split(annotation, ",")
 
-  for _, v := range tagsKeyVal {
+	for _, v := range tagsKeyVal {
 
-    tag := strings.Split(v, "=")
+		tag := strings.Split(v, "=")
 
-    if len(tag) != 2 {
-      return nil, fmt.Errorf("Invalid annotation %q:", annotation)
-    }
+		if len(tag) != 2 {
+			return nil, fmt.Errorf("Invalid annotation %q:", annotation)
+		}
 
-    tags = append(tags, &ec2.Tag{
+		tags = append(tags, &ec2.Tag{
 			Key:   aws.String(tag[0]),
 			Value: aws.String(tag[1]),
 		})
-  }
+	}
 
-  return tags, nil
+	return tags, nil
 
 }
 
-
 func createTags(volume *string, tags []*ec2.Tag) error {
 
-  sess := session.New(&aws.Config{Region: aws.String(getRegion())})
-  ec2Client := ec2.New(sess)
+	sess := session.New(&aws.Config{Region: aws.String(getRegion())})
+	ec2Client := ec2.New(sess)
 
 	input := &ec2.CreateTagsInput{
 		Resources: []*string{volume},

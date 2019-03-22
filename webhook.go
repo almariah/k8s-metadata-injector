@@ -27,7 +27,7 @@ var (
 	//defaulter = runtime.ObjectDefaulter(runtimeScheme)
 )
 
-var ignoredNamespaces = []string {
+var ignoredNamespaces = []string{
 	metav1.NamespaceSystem,
 	metav1.NamespacePublic,
 }
@@ -38,15 +38,15 @@ const (
 )
 
 type WhSvrParameters struct {
-	port int                 // webhook server port
-	certFile string          // path to the x509 certificate for https
-	keyFile string           // path to the x509 private key matching `CertFile`
-	metadataCfgFile string    // path to sidecar injector configuration file
+	port            int    // webhook server port
+	certFile        string // path to the x509 certificate for https
+	keyFile         string // path to the x509 private key matching `CertFile`
+	metadataCfgFile string // path to sidecar injector configuration file
 }
 
 type WebhookServer struct {
-	server           *http.Server
-	metadataConfig   *Config
+	server         *http.Server
+	metadataConfig *Config
 }
 
 type patchOperation struct {
@@ -71,7 +71,7 @@ func loadConfig(configFile string) (*Config, error) {
 
 func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
 
-  var body []byte
+	var body []byte
 	if r.Body != nil {
 		if data, err := ioutil.ReadAll(r.Body); err == nil {
 			body = data
@@ -83,7 +83,7 @@ func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-  // verify the content type is accurate
+	// verify the content type is accurate
 	contentType := r.Header.Get("Content-Type")
 	if contentType != "application/json" {
 		glog.Errorf("Content-Type=%s, expect application/json", contentType)
@@ -91,12 +91,12 @@ func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-  var admissionResponse *v1beta1.AdmissionResponse
+	var admissionResponse *v1beta1.AdmissionResponse
 	ar := v1beta1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &ar); err != nil {
 		glog.Errorf("Can't decode body: %v", err)
-		admissionResponse = &v1beta1.AdmissionResponse {
-			Result: &metav1.Status {
+		admissionResponse = &v1beta1.AdmissionResponse{
+			Result: &metav1.Status{
 				Message: err.Error(),
 			},
 		}
@@ -104,7 +104,7 @@ func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
 		admissionResponse = whsvr.mutate(&ar)
 	}
 
-  admissionReview := v1beta1.AdmissionReview{}
+	admissionReview := v1beta1.AdmissionReview{}
 	if admissionResponse != nil {
 		admissionReview.Response = admissionResponse
 		if ar.Request != nil {
@@ -112,7 +112,7 @@ func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-  resp, err := json.Marshal(admissionReview)
+	resp, err := json.Marshal(admissionReview)
 	if err != nil {
 		glog.Errorf("Can't encode response: %v", err)
 		http.Error(w, fmt.Sprintf("could not encode response: %v", err), http.StatusInternalServerError)
@@ -139,8 +139,8 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 		var pod corev1.Pod
 		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
 			glog.Errorf("Could not unmarshal raw object: %v", err)
-			return &v1beta1.AdmissionResponse {
-				Result: &metav1.Status {
+			return &v1beta1.AdmissionResponse{
+				Result: &metav1.Status{
 					Message: err.Error(),
 				},
 			}
@@ -155,8 +155,8 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 		var service corev1.Service
 		if err := json.Unmarshal(req.Object.Raw, &service); err != nil {
 			glog.Errorf("Could not unmarshal raw object: %v", err)
-			return &v1beta1.AdmissionResponse {
-				Result: &metav1.Status {
+			return &v1beta1.AdmissionResponse{
+				Result: &metav1.Status{
 					Message: err.Error(),
 				},
 			}
@@ -171,8 +171,8 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 		var pvc corev1.PersistentVolumeClaim
 		if err := json.Unmarshal(req.Object.Raw, &pvc); err != nil {
 			glog.Errorf("Could not unmarshal raw object: %v", err)
-			return &v1beta1.AdmissionResponse {
-				Result: &metav1.Status {
+			return &v1beta1.AdmissionResponse{
+				Result: &metav1.Status{
 					Message: err.Error(),
 				},
 			}
@@ -195,11 +195,10 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 
 	// check if namespace exist in mutationCongfig
 
-
 	// determine whether to perform mutation
 	if !mutationRequired(ignoredNamespaces, metadataConfig, metadata) {
 		glog.Infof("Skipping mutation for %s/%s due to policy check", metadata.Namespace, metadata.Name)
-		return &v1beta1.AdmissionResponse {
+		return &v1beta1.AdmissionResponse{
 			Allowed: true,
 		}
 	}
@@ -207,15 +206,15 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 	annotations := map[string]string{admissionWebhookAnnotationStatusKey: "injected"}
 	patchBytes, err := createPatch(metadata, metadataConfig, annotations)
 	if err != nil {
-		return &v1beta1.AdmissionResponse {
-			Result: &metav1.Status {
+		return &v1beta1.AdmissionResponse{
+			Result: &metav1.Status{
 				Message: err.Error(),
 			},
 		}
 	}
 
 	glog.Infof("AdmissionResponse: patch=%v\n", string(patchBytes))
-	return &v1beta1.AdmissionResponse {
+	return &v1beta1.AdmissionResponse{
 		Allowed: true,
 		Patch:   patchBytes,
 		PatchType: func() *v1beta1.PatchType {
@@ -230,9 +229,9 @@ func createPatch(metadata *metav1.ObjectMeta, metadataConfig map[string]Metadata
 
 	if podMeta, ok := metadataConfig[metadata.Namespace]; ok {
 		for k, v := range podMeta.Annotations {
-	    annotations[k] = v
+			annotations[k] = v
 		}
-    patch = append(patch, updateAnnotation(metadata.Annotations, annotations)...)
+		patch = append(patch, updateAnnotation(metadata.Annotations, annotations)...)
 		patch = append(patch, updateLabels(metadata.Labels, podMeta.Labels)...)
 	} else {
 		patch = append(patch, updateAnnotation(metadata.Annotations, annotations)...)
@@ -251,9 +250,9 @@ func updateAnnotation(target map[string]string, added map[string]string) (patch 
 		target[key] = value
 	}
 
-	patch = append(patch, patchOperation {
-		Op:   "add",
-		Path: "/metadata/annotations",
+	patch = append(patch, patchOperation{
+		Op:    "add",
+		Path:  "/metadata/annotations",
 		Value: target,
 	})
 	return patch
@@ -269,9 +268,9 @@ func updateLabels(target map[string]string, added map[string]string) (patch []pa
 		target[key] = value
 	}
 
-	patch = append(patch, patchOperation {
-		Op:   "add",
-		Path: "/metadata/labels",
+	patch = append(patch, patchOperation{
+		Op:    "add",
+		Path:  "/metadata/labels",
 		Value: target,
 	})
 	return patch
@@ -310,7 +309,6 @@ func mutationRequired(ignoredList []string, metadataConfig map[string]MetadataSp
 	glog.Infof("Mutation policy for %v/%v: status: %q required:%v", metadata.Namespace, metadata.Name, status, required)
 	return required
 }
-
 
 func potentialPodName(metadata *metav1.ObjectMeta) string {
 	if metadata.Name != "" {
