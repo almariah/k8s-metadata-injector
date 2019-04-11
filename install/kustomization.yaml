@@ -1,0 +1,13 @@
+resources:
+  - rbac.yaml
+  - webhook.yaml
+  - k8s-metadata-injector.yaml
+
+configMapGenerator:
+- name: k8s-metadata-injector
+  namespace: kube-system
+  files:
+    - metadataconfig.yaml
+
+generatorOptions:
+  disableNameSuffixHash: false

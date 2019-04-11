@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	//"k8s.io/klog"
+	"k8s.io/klog"
 
 	"k8s.io/apimachinery/pkg/fields"
 
@@ -110,15 +110,11 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	glog.Info("Starting workers")
+	klog.Info("Starting workers")
 	// Launch two workers to process Foo resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-
-	glog.Info("Started workers")
-	<-stopCh
-	glog.Info("Shutting down workers")
 
 	return nil
 }
