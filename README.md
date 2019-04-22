@@ -39,29 +39,10 @@ To install `k8s-metadata-injector`:
 * Ensure that MutatingAdmissionWebhook admission controllers are enabled.
 * Ensure that the admissionregistration.k8s.io/v1beta1 API is enabled.
 
-**Warning:** The `webhook-create-signed-cert.sh` and `webhook-patch-ca-bundle.sh` scripts will use `kubectl` default context. So if there are multiple clusters configured in kubeconfig, then you have to change the default context to the cluster where `k8s-metadata-injector` will be deployed. Also, it is recommended to update to the latest version of `kubectl`
-
-First generate and deploy the required certificate for `k8s-metadata-injector` as follow:
+Then modify the config in `metadataconfig.yaml` as desired to inject the annotations and labels to all defined namespaces, and deploy:
 
 ```bash
-./deployment/webhook-create-signed-cert.sh \
-            --service k8s-metadata-injector \
-            --namespace kube-system \
-            --secret k8s-metadata-injector
-```
-
-Then modify the config in `cm.yaml` as desired to inject the annotations and labels to all defined namespaces, and deploy:
-
-```bash
-kubectl apply -f deployment/cm.yaml
-```
-
-Finally replacing `${CA_BUNDLE}` with cluster CA certificate and install `k8s-metadata-injector` as follows:
-
-```bash
-cat deployment/install.yaml | \
-    ./deployment/webhook-patch-ca-bundle.sh | \
-    kubectl apply -f -
+kubectl apply -k install
 ```
 
 ### Required IAM policy:
@@ -89,7 +70,6 @@ In `deployment/install.yaml` kube2iam annotation `iam.amazonaws.com/role: Kubern
 To build `k8s-metadata-injector` as a docker container:
 
 ```bash
-CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o build/k8s-metadata-injector .
-docker build -t abdullahalmariah/k8s-metadata-injector:latest build/
+docker build -t abdullahalmariah/k8s-metadata-injector:latest .
 docker push abdullahalmariah/k8s-metadata-injector:latest
 ```

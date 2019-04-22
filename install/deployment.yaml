@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k8s-metadata-injector-init
+  namespace: kube-system
+  labels:
+    app: k8s-metadata-injector
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: k8s-metadata-injector
+    spec:
+      serviceAccountName: k8s-metadata-injector
+      restartPolicy: Never
+      containers:
+      - name: main
+        image: abdullahalmariah/k8s-metadata-injector:latest
+        imagePullPolicy: Always
+        command: ["/usr/bin/gencerts.sh", "-p"]
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: k8s-metadata-injector
+  namespace: kube-system
+  labels:
+    app: k8s-metadata-injector
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: k8s-metadata-injector
+      annotations:
+        iam.amazonaws.com/role: KubernetesEBSCreateTagsAccess
+    spec:
+      serviceAccountName: k8s-metadata-injector
+      containers:
+        - name: k8s-metadata-injector
+          image: abdullahalmariah/k8s-metadata-injector:latest
+          imagePullPolicy: Always
+          args:
+            - -logtostderr=true
+            - -v=2
+          ports:
+          - containerPort: 8080
+          volumeMounts:
+            - name: certs
+              mountPath: /etc/webhook/certs/
+              readOnly: true
+            - name: config
+              mountPath: /etc/webhook/config
+      volumes:
+        - name: certs
+          secret:
+            secretName: k8s-metadata-injector
+        - name: config
+          configMap:
+            name: k8s-metadata-injector

@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
-	"k8s.io/api/admission/v1beta1"
+	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	"k8s.io/api/admissionregistration/v1beta1"
+	"k8s.io/client-go/kubernetes"
 	//admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,9 +26,6 @@ var (
 	runtimeScheme = runtime.NewScheme()
 	codecs        = serializer.NewCodecFactory(runtimeScheme)
 	deserializer  = codecs.UniversalDeserializer()
-
-	// (https://github.com/kubernetes/kubernetes/issues/57982)
-	//defaulter = runtime.ObjectDefaulter(runtimeScheme)
 )
 
 var ignoredNamespaces = []string{
@@ -35,18 +36,18 @@ var ignoredNamespaces = []string{
 const (
 	admissionWebhookAnnotationInjectKey = "k8s-metadata-injector.kubernetes.io/skip"
 	admissionWebhookAnnotationStatusKey = "k8s-metadata-injector.kubernetes.io/status"
+
+	serverCertFile = "server-cert.pem"
+	serverKeyFile  = "server-key.pem"
+	caCertFile     = "ca-cert.pem"
 )
 
-type WhSvrParameters struct {
-	port            int    // webhook server port
-	certFile        string // path to the x509 certificate for https
-	keyFile         string // path to the x509 private key matching `CertFile`
-	metadataCfgFile string // path to sidecar injector configuration file
-}
-
-type WebhookServer struct {
+type Webhook struct {
+	clientset      kubernetes.Interface
 	server         *http.Server
-	metadataConfig *Config
+	cert           *certBundle
+	serviceRef     *v1beta1.ServiceReference
+	metadataConfig *MetadataConfig
 }
 
 type patchOperation struct {
@@ -55,31 +56,89 @@ type patchOperation struct {
 	Value interface{} `json:"value,omitempty"`
 }
 
-func loadConfig(configFile string) (*Config, error) {
-	data, err := ioutil.ReadFile(configFile)
+func NewWebhook(
+	clientset kubernetes.Interface,
+	certDir string,
+	webhookServiceNamespace string,
+	webhookServiceName string,
+	webhookPort int,
+	metadataConfig *MetadataConfig) (*Webhook, error) {
+
+	cert := &certBundle{
+		serverCertFile: filepath.Join(certDir, serverCertFile),
+		serverKeyFile:  filepath.Join(certDir, serverKeyFile),
+		caCertFile:     filepath.Join(certDir, caCertFile),
+	}
+	path := "/serve"
+	serviceRef := &v1beta1.ServiceReference{
+		Namespace: webhookServiceNamespace,
+		Name:      webhookServiceName,
+		Path:      &path,
+	}
+	hook := &Webhook{
+		clientset:      clientset,
+		cert:           cert,
+		serviceRef:     serviceRef,
+		metadataConfig: metadataConfig,
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(path, hook.serve)
+	tlsConfig, err := configServerTLS(cert)
 	if err != nil {
 		return nil, err
 	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+	hook.server = &http.Server{
+		Addr:      fmt.Sprintf(":%d", webhookPort),
+		Handler:   mux,
+		TLSConfig: tlsConfig,
 	}
 
-	return &cfg, nil
+	return hook, nil
 }
 
-func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
+// Start starts the admission webhook server and registers itself to the API server.
+func (wh *Webhook) Start(webhookConfigName string) error {
+	go func() {
+		glog.Info("Starting the k8s-metadata-injector admission webhook server")
+		if err := wh.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			glog.Errorf("error while serving the k8s-metadata-injector admission webhook: %v\n", err)
+		}
+	}()
 
+	return wh.selfRegistration(webhookConfigName)
+}
+
+// Stop deregisters itself with the API server and stops the admission webhook server.
+func (wh *Webhook) Stop(webhookConfigName string) error {
+	// Deregistration will be disabled for high available mode
+	/*if err := wh.selfDeregistration(webhookConfigName); err != nil {
+		return err
+	}
+	glog.Infof("Webhook %s deregistered", webhookConfigName)*/
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	glog.Info("Stopping the k8s-metadata-injector admission webhook server")
+	return wh.server.Shutdown(ctx)
+}
+
+func (wh *Webhook) serve(w http.ResponseWriter, r *http.Request) {
+	glog.V(2).Info("Serving admission request")
 	var body []byte
 	if r.Body != nil {
 		if data, err := ioutil.ReadAll(r.Body); err == nil {
+			if err != nil {
+				glog.Errorf("failed to read the request body")
+				http.Error(w, "failed to read the request body", http.StatusInternalServerError)
+				return
+			}
 			body = data
 		}
 	}
+
 	if len(body) == 0 {
-		glog.Error("empty body")
-		http.Error(w, "empty body", http.StatusBadRequest)
+		glog.Error("empty request body")
+		http.Error(w, "empty request body", http.StatusBadRequest)
 		return
 	}
 
@@ -91,20 +150,20 @@ func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var admissionResponse *v1beta1.AdmissionResponse
-	ar := v1beta1.AdmissionReview{}
+	var admissionResponse *admissionv1beta1.AdmissionResponse
+	ar := admissionv1beta1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &ar); err != nil {
 		glog.Errorf("Can't decode body: %v", err)
-		admissionResponse = &v1beta1.AdmissionResponse{
+		admissionResponse = &admissionv1beta1.AdmissionResponse{
 			Result: &metav1.Status{
 				Message: err.Error(),
 			},
 		}
 	} else {
-		admissionResponse = whsvr.mutate(&ar)
+		admissionResponse = wh.mutate(&ar)
 	}
 
-	admissionReview := v1beta1.AdmissionReview{}
+	admissionReview := admissionv1beta1.AdmissionReview{}
 	if admissionResponse != nil {
 		admissionReview.Response = admissionResponse
 		if ar.Request != nil {
@@ -125,7 +184,7 @@ func (whsvr *WebhookServer) serve(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
+func (wh *Webhook) mutate(ar *admissionv1beta1.AdmissionReview) *admissionv1beta1.AdmissionResponse {
 
 	req := ar.Request
 
@@ -134,12 +193,12 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 
 	if req.Kind.Kind == "Pod" {
 
-		metadataConfig = whsvr.metadataConfig.Pod
+		metadataConfig = wh.metadataConfig.Pod
 
 		var pod corev1.Pod
 		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
 			glog.Errorf("Could not unmarshal raw object: %v", err)
-			return &v1beta1.AdmissionResponse{
+			return &admissionv1beta1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: err.Error(),
 				},
@@ -150,12 +209,12 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 
 	} else if req.Kind.Kind == "Service" {
 
-		metadataConfig = whsvr.metadataConfig.Service
+		metadataConfig = wh.metadataConfig.Service
 
 		var service corev1.Service
 		if err := json.Unmarshal(req.Object.Raw, &service); err != nil {
 			glog.Errorf("Could not unmarshal raw object: %v", err)
-			return &v1beta1.AdmissionResponse{
+			return &admissionv1beta1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: err.Error(),
 				},
@@ -166,12 +225,12 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 
 	} else if req.Kind.Kind == "PersistentVolumeClaim" {
 
-		metadataConfig = whsvr.metadataConfig.PersistentVolumeClaim
+		metadataConfig = wh.metadataConfig.PersistentVolumeClaim
 
 		var pvc corev1.PersistentVolumeClaim
 		if err := json.Unmarshal(req.Object.Raw, &pvc); err != nil {
 			glog.Errorf("Could not unmarshal raw object: %v", err)
-			return &v1beta1.AdmissionResponse{
+			return &admissionv1beta1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: err.Error(),
 				},
@@ -198,7 +257,7 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 	// determine whether to perform mutation
 	if !mutationRequired(ignoredNamespaces, metadataConfig, metadata) {
 		glog.Infof("Skipping mutation for %s/%s due to policy check", metadata.Namespace, metadata.Name)
-		return &v1beta1.AdmissionResponse{
+		return &admissionv1beta1.AdmissionResponse{
 			Allowed: true,
 		}
 	}
@@ -206,7 +265,7 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 	annotations := map[string]string{admissionWebhookAnnotationStatusKey: "injected"}
 	patchBytes, err := createPatch(metadata, metadataConfig, annotations)
 	if err != nil {
-		return &v1beta1.AdmissionResponse{
+		return &admissionv1beta1.AdmissionResponse{
 			Result: &metav1.Status{
 				Message: err.Error(),
 			},
@@ -214,11 +273,11 @@ func (whsvr *WebhookServer) mutate(ar *v1beta1.AdmissionReview) *v1beta1.Admissi
 	}
 
 	glog.Infof("AdmissionResponse: patch=%v\n", string(patchBytes))
-	return &v1beta1.AdmissionResponse{
+	return &admissionv1beta1.AdmissionResponse{
 		Allowed: true,
 		Patch:   patchBytes,
-		PatchType: func() *v1beta1.PatchType {
-			pt := v1beta1.PatchTypeJSONPatch
+		PatchType: func() *admissionv1beta1.PatchType {
+			pt := admissionv1beta1.PatchTypeJSONPatch
 			return &pt
 		}(),
 	}
