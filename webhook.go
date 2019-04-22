@@ -111,10 +111,11 @@ func (wh *Webhook) Start(webhookConfigName string) error {
 
 // Stop deregisters itself with the API server and stops the admission webhook server.
 func (wh *Webhook) Stop(webhookConfigName string) error {
-	if err := wh.selfDeregistration(webhookConfigName); err != nil {
+	// Deregistration will be disabled for high available mode
+	/*if err := wh.selfDeregistration(webhookConfigName); err != nil {
 		return err
 	}
-	glog.Infof("Webhook %s deregistered", webhookConfigName)
+	glog.Infof("Webhook %s deregistered", webhookConfigName)*/
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	glog.Info("Stopping the k8s-metadata-injector admission webhook server")
