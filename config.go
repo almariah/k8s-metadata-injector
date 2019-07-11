@@ -1,20 +1,20 @@
 package main
 
 import (
-	"github.com/ghodss/yaml"
 	"io/ioutil"
+
+	"github.com/ghodss/yaml"
 )
 
-type MetadataConfig struct {
+type MetadataConfig map[string]MetadataConstruct
+
+type MetadataConstruct struct {
 	Pod                   map[string]MetadataSpec `json:"pod"`
 	Service               map[string]MetadataSpec `json:"service"`
 	PersistentVolumeClaim map[string]MetadataSpec `json:"persistentVolumeClaim"`
 }
 
-type MetadataSpec struct {
-	Annotations map[string]string `json:"annotations"`
-	Labels      map[string]string `json:"labels"`
-}
+type MetadataSpec map[string]string
 
 func loadConfig(configFile string) (*MetadataConfig, error) {
 	data, err := ioutil.ReadFile(configFile)

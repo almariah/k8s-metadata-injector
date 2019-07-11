@@ -14,6 +14,7 @@ import (
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/api/admissionregistration/v1beta1"
 	"k8s.io/client-go/kubernetes"
+
 	//admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -193,7 +194,7 @@ func (wh *Webhook) mutate(ar *admissionv1beta1.AdmissionReview) *admissionv1beta
 
 	if req.Kind.Kind == "Pod" {
 
-		metadataConfig = wh.metadataConfig.Pod
+		metadataConfig = (*wh.metadataConfig)[req.Namespace].Pod
 
 		var pod corev1.Pod
 		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
@@ -209,7 +210,7 @@ func (wh *Webhook) mutate(ar *admissionv1beta1.AdmissionReview) *admissionv1beta
 
 	} else if req.Kind.Kind == "Service" {
 
-		metadataConfig = wh.metadataConfig.Service
+		metadataConfig = (*wh.metadataConfig)[req.Namespace].Service
 
 		var service corev1.Service
 		if err := json.Unmarshal(req.Object.Raw, &service); err != nil {
@@ -225,7 +226,7 @@ func (wh *Webhook) mutate(ar *admissionv1beta1.AdmissionReview) *admissionv1beta
 
 	} else if req.Kind.Kind == "PersistentVolumeClaim" {
 
-		metadataConfig = wh.metadataConfig.PersistentVolumeClaim
+		metadataConfig = (*wh.metadataConfig)[req.Namespace].PersistentVolumeClaim
 
 		var pvc corev1.PersistentVolumeClaim
 		if err := json.Unmarshal(req.Object.Raw, &pvc); err != nil {
@@ -255,7 +256,7 @@ func (wh *Webhook) mutate(ar *admissionv1beta1.AdmissionReview) *admissionv1beta
 	// check if namespace exist in mutationCongfig
 
 	// determine whether to perform mutation
-	if !mutationRequired(ignoredNamespaces, metadataConfig, metadata) {
+	if !mutationRequired(ignoredNamespaces, wh.metadataConfig, metadata) {
 		glog.Infof("Skipping mutation for %s/%s due to policy check", metadata.Namespace, metadata.Name)
 		return &admissionv1beta1.AdmissionResponse{
 			Allowed: true,
@@ -286,12 +287,12 @@ func (wh *Webhook) mutate(ar *admissionv1beta1.AdmissionReview) *admissionv1beta
 func createPatch(metadata *metav1.ObjectMeta, metadataConfig map[string]MetadataSpec, annotations map[string]string) ([]byte, error) {
 	var patch []patchOperation
 
-	if podMeta, ok := metadataConfig[metadata.Namespace]; ok {
-		for k, v := range podMeta.Annotations {
+	if podMeta, ok := metadataConfig["annotations"]; ok {
+		for k, v := range podMeta {
 			annotations[k] = v
 		}
 		patch = append(patch, updateAnnotation(metadata.Annotations, annotations)...)
-		patch = append(patch, updateLabels(metadata.Labels, podMeta.Labels)...)
+		patch = append(patch, updateLabels(metadata.Labels, metadataConfig["labels"])...)
 	} else {
 		patch = append(patch, updateAnnotation(metadata.Annotations, annotations)...)
 	}
@@ -335,7 +336,7 @@ func updateLabels(target map[string]string, added map[string]string) (patch []pa
 	return patch
 }
 
-func mutationRequired(ignoredList []string, metadataConfig map[string]MetadataSpec, metadata *metav1.ObjectMeta) bool {
+func mutationRequired(ignoredList []string, metadataConfig *MetadataConfig, metadata *metav1.ObjectMeta) bool {
 	// skip special kubernete system namespaces
 	for _, namespace := range ignoredList {
 		if metadata.Namespace == namespace {
@@ -344,8 +345,8 @@ func mutationRequired(ignoredList []string, metadataConfig map[string]MetadataSp
 		}
 	}
 
-	if _, ok := metadataConfig[metadata.Namespace]; !ok {
-		glog.Infof("Skip mutation for %v for it is not configured in mutaion config:%v", metadata.Name, metadata.Namespace)
+	if _, ok := (*metadataConfig)[metadata.Namespace]; !ok {
+		glog.Infof("Skip mutation for %v for it is not configured in mutation config:%v", metadata.Name, metadata.Namespace)
 		return false
 	}
 
