@@ -37,11 +37,17 @@ func loadConfig(configFile string) (*MetadataConfig, error) {
 func (m *MetadataSpec) MergeMetadataSpec(added MetadataSpec) {
 	for k, v := range added.Annotations {
 		if _, ok := m.Annotations[k]; !ok {
+			if m.Annotations == nil {
+				m.Annotations = make(map[string]string)
+			}
 			m.Annotations[k] = v
 		}
 	}
 	for k, v := range added.Labels {
 		if _, ok := m.Labels[k]; !ok {
+			if m.Labels == nil {
+				m.Labels = make(map[string]string)
+			}
 			m.Labels[k] = v
 		}
 	}
