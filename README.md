@@ -45,6 +45,66 @@ Then modify the config in `metadataconfig.yaml` as desired to inject the annotat
 kubectl apply -k install
 ```
 
+### Namespace Configuration (`metadataconfig.yaml`):
+
+* For version `2.0.0` and later, the metadata is configured by namespace. Further you can configure default values for all namespaces (even if not configured) by using `"*"`. For configured namespaces, the default values will be merged with namespace configuration such that namespaces will always override the default values. For example:
+
+```yaml
+namespaces:
+    "*":
+        pod:
+        ...
+        service:
+        ...
+        persistentVolumeClaim:
+        ...
+    default:
+        pod:
+            annotations:
+                key: value
+                ...
+            lables:
+                key: value
+                ...
+        service:
+            annotations:
+                key: value
+                ...
+            lables:
+                key: value
+                ...
+        ...
+    other_namespace:
+        ...
+    ...
+```
+
+For version `1.x.x`, the metadata is configured by resource types. For example
+
+```yaml
+pod:
+    default:
+        annotations:
+            key: value
+            ...
+        lables:
+            key: value
+            ...
+    other_namespace:
+        ...
+service:
+    default:
+        annotations:
+            key: value
+            ...
+        lables:
+            key: value
+            ...          
+    other_namespace:
+        ...
+...
+```
+
 ### Required IAM policy:
 To tag EBS volumes based on `ebs-tagger.kubernetes.io/ebs-additional-resource-tags` annotation, the following policy is needed:
 
