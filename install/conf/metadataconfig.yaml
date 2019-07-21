@@ -17,3 +17,9 @@ namespaces:
         annotation_key: value
       labels:
         label_key: value
+  "*":
+    pod:
+      annotations:
+        default_annotation: value
+      labels:
+        default_label: value
