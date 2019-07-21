@@ -22,6 +22,7 @@ var (
 	webhookSvcName      = flag.String("webhook-svc-name", "k8s-metadata-injector", "The name of the Service for the webhook server.")
 	webhookPort         = flag.Int("webhook-port", 8080, "Service port of the webhook server.")
 	metadataConfigFile  = flag.String("metadata-config-file", "/etc/webhook/config/metadataconfig.yaml", "File containing the metadata configuration.")
+	ebsTagging          = flag.Bool("ebs-tagging", false, "Enable AWS EBS tagging.")
 )
 
 func main() {
@@ -55,10 +56,12 @@ func main() {
 
 	stopCh := make(chan struct{})
 
-	controller := NewController(kubeClient)
+	if *ebsTagging == true {
+		controller := NewController(kubeClient)
 
-	if err = controller.Run(2, stopCh); err != nil {
-		klog.Fatalf("Error running controller: %s", err.Error())
+		if err = controller.Run(2, stopCh); err != nil {
+			klog.Fatalf("Error running controller: %s", err.Error())
+		}
 	}
 
 	metadataConfig, err := loadConfig(*metadataConfigFile)

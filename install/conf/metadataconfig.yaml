@@ -1,19 +1,19 @@
-pod:
+namespaces:
   default:
-    labels:
-      Team: devops
-      Env: prod
-      Project: k8s
+    pod:
+      labels:
+        Team: devops
+        Env: prod
+        Project: k8s
+    service:
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "Team=devops,Env=prod,Project=k8s"
+    persistentVolumeClaim:
+      annotations:
+        ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=prod,Project=k8s"
   other_namespace:
-    annotations:
-      annotation_key: value
-    labels:
-      label_key: value
-service:
-  default:
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "Team=devops,Env=prod,Project=k8s"
-persistentVolumeClaim:
-  default:
-    annotations:
-      ebs-tagger.kubernetes.io/ebs-additional-resource-tags: "Team=devops,Env=prod,Project=k8s"
+    pod:
+      annotations:
+        annotation_key: value
+      labels:
+        label_key: value

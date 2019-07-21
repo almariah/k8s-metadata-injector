@@ -6,9 +6,13 @@ import (
 )
 
 type MetadataConfig struct {
-	Pod                   map[string]MetadataSpec `json:"pod"`
-	Service               map[string]MetadataSpec `json:"service"`
-	PersistentVolumeClaim map[string]MetadataSpec `json:"persistentVolumeClaim"`
+	Namespaces map[string]NamespaceConfig `json:"namespaces"`
+}
+
+type NamespaceConfig struct {
+	Pod                   MetadataSpec `json:"pod"`
+	Service               MetadataSpec `json:"service"`
+	PersistentVolumeClaim MetadataSpec `json:"persistentVolumeClaim"`
 }
 
 type MetadataSpec struct {
@@ -28,4 +32,17 @@ func loadConfig(configFile string) (*MetadataConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+func (m *MetadataSpec) MergeMetadataSpec(added MetadataSpec) {
+	for k, v := range added.Annotations {
+		if _, ok := m.Annotations[k]; !ok {
+			m.Annotations[k] = v
+		}
+	}
+	for k, v := range added.Labels {
+		if _, ok := m.Labels[k]; !ok {
+			m.Labels[k] = v
+		}
+	}
 }
