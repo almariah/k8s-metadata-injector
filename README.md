@@ -7,7 +7,7 @@ Labels and annotations are important to classify Kubernetes resources. Further, 
 The `k8s-metadata-injector` has two goals:
 
 * Inject additional labels and annotations to `pods`, `services` and `persistentvolumeclaims` based on predefined config per namespace.
-* Add tags to created AWS EBS volumes created by `persistentvolumeclaims`
+* Add tags to created AWS EBS volumes created by `persistentvolumeclaims` (`-ebs-tagging=true` should be configured)
 
 You can add tags to EBS volumes by setting the following annotations in `persistentVolumeClaim` or `volumeClaimTemplate` as follow (example):
 
@@ -38,6 +38,7 @@ k8s-metadata-injector.kubernetes.io/skip": "true"
 To install `k8s-metadata-injector`:
 * Ensure that MutatingAdmissionWebhook admission controllers are enabled.
 * Ensure that the admissionregistration.k8s.io/v1beta1 API is enabled.
+* For AWS, if tagging EBS volumes is needed, then `ebs-tagging` should be `true` in containers command line arguments. 
 
 Then modify the config in `metadataconfig.yaml` as desired to inject the annotations and labels to all defined namespaces, and deploy:
 
