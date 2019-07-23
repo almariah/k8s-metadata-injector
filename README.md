@@ -7,7 +7,7 @@ Labels and annotations are important to classify Kubernetes resources. Further, 
 The `k8s-metadata-injector` has two goals:
 
 * Inject additional labels and annotations to `pods`, `services` and `persistentvolumeclaims` based on predefined config per namespace.
-* Add tags to created AWS EBS volumes created by `persistentvolumeclaims`
+* Add tags to created AWS EBS volumes created by `persistentvolumeclaims` (`-ebs-tagging=true` should be configured)
 
 You can add tags to EBS volumes by setting the following annotations in `persistentVolumeClaim` or `volumeClaimTemplate` as follow (example):
 
@@ -38,11 +38,72 @@ k8s-metadata-injector.kubernetes.io/skip": "true"
 To install `k8s-metadata-injector`:
 * Ensure that MutatingAdmissionWebhook admission controllers are enabled.
 * Ensure that the admissionregistration.k8s.io/v1beta1 API is enabled.
+* For AWS, if tagging EBS volumes is needed, then `ebs-tagging` should be `true` in containers command line arguments. 
 
 Then modify the config in `metadataconfig.yaml` as desired to inject the annotations and labels to all defined namespaces, and deploy:
 
 ```bash
 kubectl apply -k install
+```
+
+### Namespace Configuration (`metadataconfig.yaml`):
+
+* For version `2.0.0` and later, the metadata is configured by namespace. Further you can configure default values for all namespaces (even if not configured) by using `"*"`. For configured namespaces, the default values will be merged with namespace configuration such that namespaces will always override the default values. For example:
+
+```yaml
+namespaces:
+    "*":
+        pod:
+        ...
+        service:
+        ...
+        persistentVolumeClaim:
+        ...
+    default:
+        pod:
+            annotations:
+                key: value
+                ...
+            lables:
+                key: value
+                ...
+        service:
+            annotations:
+                key: value
+                ...
+            lables:
+                key: value
+                ...
+        ...
+    other_namespace:
+        ...
+    ...
+```
+
+For version `1.x.x`, the metadata is configured by resource types. For example
+
+```yaml
+pod:
+    default:
+        annotations:
+            key: value
+            ...
+        lables:
+            key: value
+            ...
+    other_namespace:
+        ...
+service:
+    default:
+        annotations:
+            key: value
+            ...
+        lables:
+            key: value
+            ...          
+    other_namespace:
+        ...
+...
 ```
 
 ### Required IAM policy:
