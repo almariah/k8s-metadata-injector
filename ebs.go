@@ -8,29 +8,37 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+
+	"k8s.io/klog"
 )
 
-func getEBSTags(annotation string) ([]*ec2.Tag, error) {
+func getEBSTags(annotation string) []*ec2.Tag {
 
 	var tags []*ec2.Tag
 
-	tagsKeyVal := strings.Split(annotation, ",")
+	tagsList := strings.Split(strings.TrimSpace(annotation), ",")
 
-	for _, v := range tagsKeyVal {
+	for _, v := range tagsList {
 
-		tag := strings.Split(v, "=")
+		tag := strings.Split(strings.TrimSpace(v), "=")
 
-		if len(tag) != 2 {
-			return nil, fmt.Errorf("Invalid annotation %q:", annotation)
+		if len(tag) == 2 {
+			tags = append(tags, &ec2.Tag{
+				Key:   aws.String(tag[0]),
+				Value: aws.String(tag[1]),
+			})
+		} else if len(tag) == 1 {
+			tags = append(tags, &ec2.Tag{
+				Key:   aws.String(tag[0]),
+				Value: aws.String(""),
+			})
+		} else {
+			klog.Warningf("Invalid annotation %q:", annotation)
+			return nil
 		}
-
-		tags = append(tags, &ec2.Tag{
-			Key:   aws.String(tag[0]),
-			Value: aws.String(tag[1]),
-		})
 	}
 
-	return tags, nil
+	return tags
 
 }
 

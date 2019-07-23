@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"k8s.io/klog"
 
 	"k8s.io/apimachinery/pkg/fields"
@@ -96,13 +95,13 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	glog.Info("Starting ebs-tagger controller")
+	klog.Info("Starting ebs-tagger controller")
 
 	go c.pvcInformer.Run(stopCh)
 	go c.pvInformer.Run(stopCh)
 
 	// Wait for the caches to be synced before starting workers
-	glog.Info("Waiting for informer caches to sync")
+	klog.Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.pvcInformer.HasSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
@@ -142,11 +141,11 @@ func (c *Controller) processNext() bool {
 		// No error, reset the ratelimit counters
 		c.queue.Forget(key)
 	} else if c.queue.NumRequeues(key) < maxRetries {
-		glog.Infof("Error processing %s (will retry): %v", key, err)
+		klog.Infof("Error processing %s (will retry): %v", key, err)
 		c.queue.AddRateLimited(key)
 	} else {
 		// err != nil and too many retries
-		glog.Errorf("Error processing %s (giving up): %v", key, err)
+		klog.Errorf("Error processing %s (giving up): %v", key, err)
 		c.queue.Forget(key)
 		runtime.HandleError(err)
 	}
@@ -186,16 +185,16 @@ func (c *Controller) process(task Task) error {
 		if existsPVC {
 			pvc := objPVC.(*corev1.PersistentVolumeClaim)
 
-			tags, err := getEBSTags(pvc.Annotations[ebsTagsAnnotationKey])
-			if err != nil {
-				return err
+			if annotation, ok := pvc.Annotations[ebsTagsAnnotationKey]; ok {
+				tags := getEBSTags(annotation)
+				if tags != nil {
+					err = createTags(&volumeID, tags)
+					if err != nil {
+						return err
+					}
+					klog.Infof("EBS tags created!")
+				}
 			}
-
-			err = createTags(&volumeID, tags)
-			if err != nil {
-				return err
-			}
-			glog.Infof("EBS tags created!")
 		}
 	}
 
