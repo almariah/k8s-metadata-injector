@@ -64,6 +64,5 @@ func getRegion() string {
 	if r, err := svc.Region(); err == nil {
 		region = r
 	}
-	fmt.Println("regions", region)
 	return region
 }
