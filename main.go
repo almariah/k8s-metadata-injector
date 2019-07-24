@@ -58,10 +58,7 @@ func main() {
 
 	if *ebsTagging == true {
 		controller := NewController(kubeClient)
-
-		if err = controller.Run(2, stopCh); err != nil {
-			klog.Fatalf("Error running controller: %s", err.Error())
-		}
+		go controller.Run(2, stopCh)
 	}
 
 	metadataConfig, err := loadConfig(*metadataConfigFile)

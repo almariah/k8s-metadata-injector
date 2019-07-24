@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"k8s.io/klog"
 
 	"k8s.io/apimachinery/pkg/fields"
@@ -68,19 +67,37 @@ func NewController(kubeclientset kubernetes.Interface) *Controller {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {
 				pv := obj.(*corev1.PersistentVolume)
-				if pv.Spec.PersistentVolumeSource.AWSElasticBlockStore != nil {
-					queue.AddRateLimited(Task{
-						Key:    key,
-						Action: "CREATE",
-					})
+				if pv.Spec.PersistentVolumeSource.AWSElasticBlockStore == nil {
+					return
 				}
+				queue.AddRateLimited(Task{
+					Key:    key,
+					Action: "CREATE",
+				})
 			} else {
 				runtime.HandleError(err)
 				return
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				pvNew := new.(*corev1.PersistentVolume)
+				pvOld := old.(*corev1.PersistentVolume)
+				if pvNew.ResourceVersion == pvOld.ResourceVersion {
+					return
+				}
+				if pvNew.Spec.PersistentVolumeSource.AWSElasticBlockStore == nil {
+					return
+				}
+				queue.AddRateLimited(Task{
+					Key:    key,
+					Action: "UPDATE",
+				})
+			} else {
+				runtime.HandleError(err)
+				return
+			}
 		},
 	})
 
@@ -92,23 +109,28 @@ func NewController(kubeclientset kubernetes.Interface) *Controller {
 	}
 }
 
-func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
+func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) {
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	glog.Info("Starting ebs-tagger controller")
+	klog.Info("Starting ebs-tagger controller")
+	defer klog.Infof("Shutting down ebs-tagger controller")
 
 	go c.pvcInformer.Run(stopCh)
 	go c.pvInformer.Run(stopCh)
 
 	// Wait for the caches to be synced before starting workers
-	glog.Info("Waiting for informer caches to sync")
-	if ok := cache.WaitForCacheSync(stopCh, c.pvcInformer.HasSynced); !ok {
-		return fmt.Errorf("failed to wait for caches to sync")
+	klog.Info("Waiting for informer caches to sync")
+
+	if !cache.WaitForCacheSync(stopCh, c.pvcInformer.HasSynced) {
+		runtime.HandleError(fmt.Errorf("failed to wait for PVC caches to sync"))
+		return
 	}
-	if ok := cache.WaitForCacheSync(stopCh, c.pvInformer.HasSynced); !ok {
-		return fmt.Errorf("failed to wait for caches to sync")
-	}
+
+	if !cache.WaitForCacheSync(stopCh, c.pvInformer.HasSynced) {
+		runtime.HandleError(fmt.Errorf("failed to wait for PV caches to sync"))
+		return
+    }
 
 	klog.Info("Starting workers")
 	// Launch two workers to process Foo resources
@@ -116,7 +138,8 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	return nil
+	// wait until we're told to stop
+	<-stopCh
 }
 
 // runWorker is a long-running function that will continually call the
@@ -142,11 +165,11 @@ func (c *Controller) processNext() bool {
 		// No error, reset the ratelimit counters
 		c.queue.Forget(key)
 	} else if c.queue.NumRequeues(key) < maxRetries {
-		glog.Infof("Error processing %s (will retry): %v", key, err)
+		klog.Infof("Error processing %s (will retry): %v", key, err)
 		c.queue.AddRateLimited(key)
 	} else {
 		// err != nil and too many retries
-		glog.Errorf("Error processing %s (giving up): %v", key, err)
+		klog.Errorf("Error processing %s (giving up): %v", key, err)
 		c.queue.Forget(key)
 		runtime.HandleError(err)
 	}
@@ -170,7 +193,20 @@ func (c *Controller) process(task Task) error {
 			return nil
 		}
 
-		volumeID := strings.Split(volume, "/")[3]
+		var volumeID string
+		volumeIDList := strings.Split(volume, "/")
+
+		if len(volumeIDList) == 4 {
+			volumeID = volumeIDList[3]
+		} else if len(volumeIDList) == 1 {
+			volumeID = volumeIDList[0]
+		} else {
+			return fmt.Errorf("failed to parse EBS %q", volume)
+		}
+
+		if pv.Spec.ClaimRef == nil {
+			return nil
+		}
 
 		if pv.Spec.ClaimRef.Kind != "PersistentVolumeClaim" {
 			return nil
@@ -186,16 +222,16 @@ func (c *Controller) process(task Task) error {
 		if existsPVC {
 			pvc := objPVC.(*corev1.PersistentVolumeClaim)
 
-			tags, err := getEBSTags(pvc.Annotations[ebsTagsAnnotationKey])
-			if err != nil {
-				return err
+			if annotation, ok := pvc.Annotations[ebsTagsAnnotationKey]; ok {
+				tags := getEBSTags(annotation)
+				if tags != nil {
+					err = createTags(&volumeID, tags)
+					if err != nil {
+						return err
+					}
+					klog.Infof("Tags created for EBS %q (%q)!", volumeID, pvcName)
+				}
 			}
-
-			err = createTags(&volumeID, tags)
-			if err != nil {
-				return err
-			}
-			glog.Infof("EBS tags created!")
 		}
 	}
 
