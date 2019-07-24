@@ -48,9 +48,15 @@ kubectl apply -k install
 
 ### Namespace Configuration (`metadataconfig.yaml`):
 
-* For version `2.0.0` and later, the metadata is configured by namespace. Further you can configure default values for all namespaces (even if not configured) by using `"*"`. For configured namespaces, the default values will be merged with namespace configuration such that namespaces will always override the default values. For example:
+* For version `2.0.0` and later, the metadata is configured by namespace. Further you can configure default values for all namespaces (even if not configured) by using `"*"`. For configured namespaces, the default values will be merged with namespace configuration such that namespaces will always override the default values.
+
+Also, you can ignore namespaces from injection (`kube-system` and `kube-public` are ignored by default) by using `ignoredNamespaces` (`v2.0.0` only). For example:
 
 ```yaml
+ignoredNamespaces:
+    - ns1
+    - ns2
+    ...
 namespaces:
     "*":
         pod:

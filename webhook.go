@@ -28,7 +28,7 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 )
 
-var ignoredNamespaces = []string{
+var defaultIgnoredNamespaces = []string{
 	metav1.NamespaceSystem,
 	metav1.NamespacePublic,
 }
@@ -63,6 +63,8 @@ func NewWebhook(
 	webhookServiceName string,
 	webhookPort int,
 	metadataConfig *MetadataConfig) (*Webhook, error) {
+
+    metadataConfig.IgnoredNamespaces = append(metadataConfig.IgnoredNamespaces, defaultIgnoredNamespaces...)
 
 	cert := &certBundle{
 		serverCertFile: filepath.Join(certDir, serverCertFile),
@@ -287,7 +289,7 @@ func (wh *Webhook) mutate(ar *admissionv1beta1.AdmissionReview) *admissionv1beta
 		req.Kind, req.Namespace, req.Name, metadata.Name, req.UID, req.Operation, req.UserInfo)
 
 	// determine whether to perform mutation
-	if !mutationRequired(ignoredNamespaces, objectConfig, metadata) {
+	if !mutationRequired(wh.metadataConfig.IgnoredNamespaces, objectConfig, metadata) {
 		glog.Infof("Skipping mutation for %s/%s due to policy check", metadata.Namespace, metadata.Name)
 		return &admissionv1beta1.AdmissionResponse{
 			Allowed: true,

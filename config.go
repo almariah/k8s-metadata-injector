@@ -6,7 +6,8 @@ import (
 )
 
 type MetadataConfig struct {
-	Namespaces map[string]NamespaceConfig `json:"namespaces"`
+	Namespaces        map[string]NamespaceConfig `json:"namespaces"`
+	IgnoredNamespaces []string                   `json:"ignoredNamespaces"`
 }
 
 type NamespaceConfig struct {
